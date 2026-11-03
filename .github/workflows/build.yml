@@ -22,13 +22,37 @@ jobs:
         with:
           gradle-version: 8.7
 
+      - name: Repodaki zip dosyasını çıkar
+        run: |
+          mkdir -p /tmp/src
+          Z=$(find . -iname "*.zip" -not -path "./.git/*" | head -1)
+          if [ -n "$Z" ]; then
+            echo "Zip bulundu: $Z"
+            unzip -oq "$Z" -d /tmp/src
+          else
+            echo "Zip yok, repo içeriği kullanılacak"
+            cp -r . /tmp/src
+          fi
+
+      - name: Proje klasörünü bul
+        id: proj
+        run: |
+          F=$(find /tmp/src -name settings.gradle.kts | head -1)
+          if [ -z "$F" ]; then
+            echo "settings.gradle.kts bulunamadı. İçerik:"
+            find /tmp/src -not -path "*/.git/*" | head -50
+            exit 1
+          fi
+          D=$(dirname "$F")
+          echo "Proje klasörü: $D"
+          echo "dir=$D" >> "$GITHUB_OUTPUT"
+
       - name: APK derle
+        working-directory: ${{ steps.proj.outputs.dir }}
         run: gradle assembleDebug assembleRelease --no-daemon --stacktrace
 
       - name: APK yükle
         uses: actions/upload-artifact@v4
         with:
           name: NovaDNS-apk
-          path: |
-            app/build/outputs/apk/debug/*.apk
-            app/build/outputs/apk/release/*.apk
+          path: /tmp/src/**/build/outputs/apk/**/*.apk
