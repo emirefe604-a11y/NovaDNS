@@ -4,6 +4,9 @@ on:
   push:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -49,10 +52,30 @@ jobs:
 
       - name: APK derle
         working-directory: ${{ steps.proj.outputs.dir }}
-        run: gradle assembleDebug assembleRelease --no-daemon --stacktrace
+        run: gradle assembleDebug --no-daemon --stacktrace
 
-      - name: APK yükle
-        uses: actions/upload-artifact@v4
-        with:
-          name: NovaDNS-apk
-          path: /tmp/src/**/build/outputs/apk/**/*.apk
+      - name: APK'yı hazırla
+        run: |
+          APK=$(find /tmp/src -path "*outputs/apk/debug/*.apk" | head -1)
+          cp "$APK" NovaDNS.apk
+          ls -la NovaDNS.apk
+
+      - name: APK'yı repoya koy (doğrudan indirilebilir)
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add -f NovaDNS.apk
+          git commit -m "NovaDNS.apk güncellendi [skip ci]" || echo "Değişiklik yok"
+          git push || echo "Push başarısız (izinleri kontrol et)"
+
+      - name: Release olarak yayınla (sabit link)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --cleanup-tag -y --repo "${{ github.repository }}" || true
+          gh release create latest NovaDNS.apk \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "Nova DNS (son sürüm)" \
+            --notes "Doğrudan indirilebilir APK" \
+            --latest
